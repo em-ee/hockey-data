@@ -15,6 +15,7 @@ shots<-shots%>%
 shooter_chars<-shots%>%
   select(shooterName, teamCode, playerPositionThatDidEvent)%>%
   group_by(shooterName, playerPositionThatDidEvent)%>%
+  filter(playerPositionThatDidEvent!="")%>%
   unique()
 
 shot_type <- shots%>%
@@ -44,7 +45,7 @@ shot_tots<-shot_cat%>%
 
 shot_tots$tot = rowSums(shot_tots[2:8], na.rm = TRUE)
 
-shot_tots<-shot_tots%>%
+shot_tots_sum<-shot_tots%>%
   group_by(shooterName)%>%
   summarize(defl = round((defl/tot), 1),
             back = round((back/tot), 1),
@@ -53,22 +54,23 @@ shot_tots<-shot_tots%>%
             snap = round((snap/tot), 1),
             tip = round((tip/tot), 1),
             wrap = round((wrap/tot), 1),
-            tot = tot)
-
-# shot_tots<-shot_tots%>%
-#   filter(tot<32)
+            tot = tot)%>%
+  filter(tot>30)
 
 nope <- c(1,9)
-shot_dist <- (dist(shot_tots[, -nope], method = "euclidean"))
-shot_dist <- (as.matrix(shot_dist))
-
+# shot_tots<-shot_tots%>%
+#   filter(tot<32)
+# 
+# shot_dist <- (dist(shot_tots[, -nope], method = "euclidean"))
+# shot_dist <- (as.matrix(shot_dist))
+# 
 # shot_pc <- prcomp(shot_tots[, -nope])
 # biplot(shot_pc, scale = 0)
 # 
 # shot_pc12<-data.frame(shot_pc$x[, 1:2])
 
 tot_withinss <- map_dbl(1:10,  function(k){
-  model <- kmeans(x = shot_dist, centers = k)
+  model <- kmeans(x = shot_tots_sum[, -nope], centers = k)
   model$tot.withinss
 })
 
@@ -77,21 +79,23 @@ elbow_df <- data.frame(
   tot_withinss = tot_withinss
 )
 
-plot(elbow_df$k, elbow_df$tot_withinss)
 
-shot_k <- kmeans(shot_dist, centers = 3)
-shot_pam <- pam(shot_dist, k = 3)
+ggplot(elbow_df, aes(x = k, y = tot_withinss))+
+  geom_point(col = "#c51b7d")+
+  geom_line(col = "#c51b7d")+
+  ggtitle("Elbow plot for k=1 to k=10")+
+  labs(x = "K", y = "Total within-cluster sum of squares")+
+  theme(plot.title = element_text(hjust = 0.5))
 
-plot(silhouette(shot_pam), border = NA, col = c("#c51b7d", "#5aae61", "#253494"))
+shot_k <- kmeans(shot_tots_sum[, -nope], centers = 3)
+shot_d <- daisy(shot_tots_sum[, -nope])
+
+plot(silhouette(shot_k$cluster, shot_d), border = NA, col = c("#c51b7d", "#5aae61", "#253494"))
+
 
 shot_cluster <- shot_k$cluster
 
-shot_totsk <- mutate(shot_tots, cluster = shot_cluster)
-
-# shot_totsk <- mutate(shot_totsk, shooterName = shot_tots$shooterName)
-# shot_totsk <- shot_totsk%>%
-#   left_join(shot_tots, by = "shooterName")
-
+shot_totsk <- mutate(shot_tots_sum, cluster = shot_cluster)
 
 ggplot(shot_totsk, aes(wrist, slap, color = factor(cluster)))+
   geom_jitter()+
@@ -127,6 +131,13 @@ players1<-as.data.frame(shot_exps%>%
   select(-c(teamCode, playerPositionThatDidEvent))%>%
   unique())
 
+forw1<-as.data.frame(shot_exps%>%
+                      filter(cluster==1)%>%
+                      filter(playerPositionThatDidEvent!="D")%>%
+                      select(shooterName:cluster)%>%
+                      arrange(desc(tot))%>%
+                      unique())
+
 players2<-as.data.frame(shot_exps%>%
   filter(cluster==2)%>%
   arrange(desc(tot))%>%
@@ -145,5 +156,19 @@ players3<-as.data.frame(shot_exps%>%
   arrange(desc(tot))%>%
   select(-c(teamCode, playerPositionThatDidEvent))%>%
   unique())
+
+forw3<-as.data.frame(shot_exps%>%
+                       filter(cluster==3)%>%
+                       filter(playerPositionThatDidEvent!="D")%>%
+                       select(shooterName:cluster)%>%
+                       arrange(desc(tot))%>%
+                       unique())
+
+def3<-as.data.frame(shot_exps%>%
+                       filter(cluster==3)%>%
+                       filter(playerPositionThatDidEvent=="D")%>%
+                       select(shooterName:cluster)%>%
+                       arrange(desc(tot))%>%
+                       unique())
 
 
